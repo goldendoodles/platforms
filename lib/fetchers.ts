@@ -5,29 +5,42 @@ import { posts, sites, users } from "./schema";
 import { serialize } from "next-mdx-remote/serialize";
 import { replaceExamples, replaceTweets } from "@/lib/remark-plugins";
 
+
 export async function getSiteData(domain: string) {
+  if (!domain) {
+    throw new Error('Domain is required to fetch site data');
+  }
+
   const subdomain = domain.endsWith(`.${process.env.NEXT_PUBLIC_ROOT_DOMAIN}`)
     ? domain.replace(`.${process.env.NEXT_PUBLIC_ROOT_DOMAIN}`, "")
     : null;
 
-  return await unstable_cache(
-    async () => {
-      return await db.query.sites.findFirst({
-        where: subdomain
-          ? eq(sites.subdomain, subdomain)
-          : eq(sites.customDomain, domain),
-        with: {
-          user: true,
-        },
-      });
-    },
-    [`${domain}-metadata`],
-    {
-      revalidate: 900,
-      tags: [`${domain}-metadata`],
-    },
-  )();
+  try {
+    const siteData = await unstable_cache(
+      async () => {
+        return await db.query.sites.findFirst({
+          where: subdomain
+            ? eq(sites.subdomain, subdomain)
+            : eq(sites.customDomain, domain),
+          with: {
+            user: true,
+          },
+        });
+      },
+      [`${domain}-metadata`],
+      {
+        revalidate: 900,
+        tags: [`${domain}-metadata`],
+      },
+    )();
+
+    return siteData || null; // Ensure null is returned if no data is found
+  } catch (error) {
+    console.error('Error fetching site data:', error);
+    return null; // Return null if there's an error
+  }
 }
+
 
 export async function getPostsForSite(domain: string) {
   const subdomain = domain.endsWith(`.${process.env.NEXT_PUBLIC_ROOT_DOMAIN}`)
